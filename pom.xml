@@ -16,7 +16,7 @@
 
     <packaging>war</packaging>
 
-    <name>scratch-simple-webapp</name>
+    <name>${project.artifactId}</name>
 
     <build>
         <plugins>
