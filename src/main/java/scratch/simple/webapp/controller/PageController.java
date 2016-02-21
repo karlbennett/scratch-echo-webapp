@@ -17,13 +17,23 @@
 package scratch.simple.webapp.controller;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.nio.client.CloseableHttpAsyncClient;
+import org.apache.http.impl.nio.client.HttpAsyncClients;
+import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
+import org.apache.http.impl.nio.reactor.DefaultConnectingIOReactor;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 /**
  * @author Karl Bennett
@@ -32,17 +42,36 @@ import java.util.Enumeration;
 public class PageController {
 
     @RequestMapping
-    public ModelAndView view(HttpServletRequest request) throws IOException {
+    public ModelAndView view(HttpServletRequest request) throws IOException, ExecutionException, InterruptedException {
         return new ModelAndView("page").addObject("request", toString(request));
     }
 
-    private static String toString(HttpServletRequest request) throws IOException {
+    private static String toString(HttpServletRequest request) throws IOException, ExecutionException, InterruptedException {
 
         final StringBuilder builder = new StringBuilder();
 
         appendMethod(builder, request);
         appendHeaders(builder, request);
         appendBody(builder, request);
+
+        final PoolingNHttpClientConnectionManager connManager = new PoolingNHttpClientConnectionManager(new DefaultConnectingIOReactor());
+        connManager.setDefaultMaxPerRoute(2000);
+        connManager.setMaxTotal(2000);
+        final CloseableHttpAsyncClient httpclient = HttpAsyncClients.createPipelining(connManager);
+        httpclient.start();
+
+        final List<Future<HttpResponse>> futures = new ArrayList<Future<HttpResponse>>(100);
+        for (int i = 0; i < 2000; i++) {
+            futures.add(httpclient.execute(new HttpGet("http://localhost:8181/rest/users"), null));
+            System.out.println("Made request: " + i);
+        }
+
+        for (int i = 0; i < 2000; i++) {
+            futures.get(i).get();
+            System.out.println("Finished request: " + i);
+        }
+
+        httpclient.close();
 
         return builder.toString();
     }
